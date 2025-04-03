@@ -15,4 +15,4 @@ RUN pip install --upgrade pip && \
 ENV PYTHONUNBUFFERED=1
 
 # Default command: run a demo task using OpenAI
-CMD ["python", "scripts/run_agent.py", "--env", "osworld", "--agent", "agent_s2", "--task", "tasks/osworld/open_calculator.yaml"]
+CMD ["python", "gui_agents/s2/cli_app.py", "--env", "osworld", "--agent", "agent_s2", "--task", "tasks/osworld/open_calculator.yaml"]

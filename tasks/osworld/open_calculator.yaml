@@ -1,0 +1,4 @@
+description: "Open the calculator app"
+subtasks:
+  - description: "Find and click the calculator icon"
+    success_criteria: "Calculator app is open"

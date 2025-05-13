@@ -7,6 +7,7 @@ from gui_agents.s2.core.engine import (
     LMMEngineAzureOpenAI,
     LMMEngineHuggingFace,
     LMMEngineOpenAI,
+    LMMEngineOpenRouter,
     LMMEnginevLLM,
     LMMEngineGemini,
 )
@@ -29,6 +30,8 @@ class LMMAgent:
                     self.engine = LMMEngineHuggingFace(**engine_params)
                 elif engine_type == "gemini":
                     self.engine = LMMEngineGemini(**engine_params)
+                elif engine_type == "open_router":
+                    self.engine = LMMEngineOpenRouter(**engine_params)
                 else:
                     raise ValueError("engine_type is not supported")
             else:
@@ -121,6 +124,7 @@ class LMMAgent:
                 LMMEngineAzureOpenAI,
                 LMMEngineHuggingFace,
                 LMMEngineGemini,
+                LMMEngineOpenRouter,
             ),
         ):
             # infer role from previous message
@@ -260,6 +264,8 @@ class LMMAgent:
                     )
 
             self.messages.append(message)
+        else:
+            raise ValueError("engine_type is not supported")
 
     def get_response(
         self,

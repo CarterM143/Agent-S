@@ -10,8 +10,54 @@ class LMMEngine:
     pass
 
 
+class OpenAIEmbeddingEngine(LMMEngine):
+    def __init__(
+        self,
+        api_key=None,
+        rate_limit: int = -1,
+        display_cost: bool = True,
+    ):
+        """Init an OpenAI Embedding engine
+
+        Args:
+            api_key (_type_, optional): Auth key from OpenAI. Defaults to None.
+            rate_limit (int, optional): Max number of requests per minute. Defaults to -1.
+            display_cost (bool, optional): Display cost of API call. Defaults to True.
+        """
+        self.model = "text-embedding-3-small"
+        self.cost_per_thousand_tokens = 0.00002
+
+        api_key = api_key or os.getenv("OPENAI_API_KEY")
+        if api_key is None:
+            raise ValueError(
+                "An API Key needs to be provided in either the api_key parameter or as an environment variable named OPENAI_API_KEY"
+            )
+        self.api_key = api_key
+        self.display_cost = display_cost
+        self.request_interval = 0 if rate_limit == -1 else 60.0 / rate_limit
+
+    @backoff.on_exception(
+        backoff.expo,
+        (
+            APIError,
+            RateLimitError,
+            APIConnectionError,
+        ),
+    )
+    def get_embeddings(self, text: str) -> np.ndarray:
+        client = OpenAI(api_key=self.api_key)
+        response = client.embeddings.create(model=self.model, input=text)
+        if self.display_cost:
+            total_tokens = response.usage.total_tokens
+            cost = self.cost_per_thousand_tokens * total_tokens / 1000
+            # print(f"Total cost for this embedding API call: {cost}")
+        return np.array([data.embedding for data in response.data])
+
+
 class LMMEngineOpenAI(LMMEngine):
-    def __init__(self, api_key=None, model=None, rate_limit=-1, **kwargs):
+    def __init__(
+        self, base_url=None, api_key=None, model=None, rate_limit=-1, **kwargs
+    ):
         assert model is not None, "model must be provided"
         self.model = model
 
@@ -21,10 +67,15 @@ class LMMEngineOpenAI(LMMEngine):
                 "An API Key needs to be provided in either the api_key parameter or as an environment variable named OPENAI_API_KEY"
             )
 
+        self.base_url = base_url
+
         self.api_key = api_key
         self.request_interval = 0 if rate_limit == -1 else 60.0 / rate_limit
 
-        self.llm_client = OpenAI(api_key=self.api_key)
+        if not self.base_url:
+            self.llm_client = OpenAI(api_key=self.api_key)
+        else:
+            self.llm_client = OpenAI(base_url=self.base_url, api_key=self.api_key)
 
     @backoff.on_exception(
         backoff.expo, (APIConnectionError, APIError, RateLimitError), max_time=60
@@ -45,7 +96,9 @@ class LMMEngineOpenAI(LMMEngine):
 
 
 class LMMEngineAnthropic(LMMEngine):
-    def __init__(self, api_key=None, model=None, thinking=False, **kwargs):
+    def __init__(
+        self, base_url=None, api_key=None, model=None, thinking=False, **kwargs
+    ):
         assert model is not None, "model must be provided"
         self.model = model
         self.thinking = thinking
@@ -135,53 +188,52 @@ class LMMEngineGemini(LMMEngine):
         )
 
 
-class OpenAIEmbeddingEngine(LMMEngine):
+class LMMEngineOpenRouter(LMMEngine):
     def __init__(
-        self,
-        api_key=None,
-        rate_limit: int = -1,
-        display_cost: bool = True,
+        self, base_url=None, api_key=None, model=None, rate_limit=-1, **kwargs
     ):
-        """Init an OpenAI Embedding engine
+        assert model is not None, "model must be provided"
+        self.model = model
 
-        Args:
-            api_key (_type_, optional): Auth key from OpenAI. Defaults to None.
-            rate_limit (int, optional): Max number of requests per minute. Defaults to -1.
-            display_cost (bool, optional): Display cost of API call. Defaults to True.
-        """
-        self.model = "text-embedding-3-small"
-        self.cost_per_thousand_tokens = 0.00002
-
-        api_key = api_key or os.getenv("OPENAI_API_KEY")
+        api_key = api_key or os.getenv("OPENROUTER_API_KEY")
         if api_key is None:
             raise ValueError(
-                "An API Key needs to be provided in either the api_key parameter or as an environment variable named OPENAI_API_KEY"
+                "An API Key needs to be provided in either the api_key parameter or as an environment variable named OPENROUTER_API_KEY"
             )
+
+        self.base_url = base_url or os.getenv("OPEN_ROUTER_ENDPOINT_URL")
+        if self.base_url is None:
+            raise ValueError(
+                "An endpoint URL needs to be provided in either the endpoint_url parameter or as an environment variable named OPEN_ROUTER_ENDPOINT_URL"
+            )
+
         self.api_key = api_key
-        self.display_cost = display_cost
         self.request_interval = 0 if rate_limit == -1 else 60.0 / rate_limit
 
+        self.llm_client = OpenAI(base_url=self.base_url, api_key=self.api_key)
+
     @backoff.on_exception(
-        backoff.expo,
-        (
-            APIError,
-            RateLimitError,
-            APIConnectionError,
-        ),
+        backoff.expo, (APIConnectionError, APIError, RateLimitError), max_time=60
     )
-    def get_embeddings(self, text: str) -> np.ndarray:
-        client = OpenAI(api_key=self.api_key)
-        response = client.embeddings.create(model=self.model, input=text)
-        if self.display_cost:
-            total_tokens = response.usage.total_tokens
-            cost = self.cost_per_thousand_tokens * total_tokens / 1000
-            # print(f"Total cost for this embedding API call: {cost}")
-        return np.array([data.embedding for data in response.data])
+    def generate(self, messages, temperature=0.0, max_new_tokens=None, **kwargs):
+        """Generate the next message based on previous messages"""
+        return (
+            self.llm_client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                max_tokens=max_new_tokens if max_new_tokens else 4096,
+                temperature=temperature,
+                **kwargs,
+            )
+            .choices[0]
+            .message.content
+        )
 
 
 class LMMEngineAzureOpenAI(LMMEngine):
     def __init__(
         self,
+        base_url=None,
         api_key=None,
         azure_endpoint=None,
         model=None,
@@ -276,9 +328,9 @@ class LMMEnginevLLM(LMMEngine):
 
 
 class LMMEngineHuggingFace(LMMEngine):
-    def __init__(self, api_key=None, endpoint_url=None, rate_limit=-1, **kwargs):
-        assert endpoint_url is not None, "HuggingFace endpoint must be provided"
-        self.endpoint_url = endpoint_url
+    def __init__(self, base_url=None, api_key=None, rate_limit=-1, **kwargs):
+        assert base_url is not None, "HuggingFace endpoint must be provided"
+        self.base_url = base_url
 
         api_key = api_key or os.getenv("HF_TOKEN")
         if api_key is None:
@@ -289,7 +341,7 @@ class LMMEngineHuggingFace(LMMEngine):
         self.api_key = api_key
         self.request_interval = 0 if rate_limit == -1 else 60.0 / rate_limit
 
-        self.llm_client = OpenAI(base_url=self.endpoint_url, api_key=self.api_key)
+        self.llm_client = OpenAI(base_url=self.base_url, api_key=self.api_key)
 
     @backoff.on_exception(
         backoff.expo, (APIConnectionError, APIError, RateLimitError), max_time=60

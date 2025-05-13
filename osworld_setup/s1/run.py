@@ -1,4 +1,4 @@
-"""OSWorld's run.py with AgentS2."""
+"""OSWorld's run.py with AgentS."""
 
 """Script to run end-to-end evaluation on the benchmark.
 Utils and basic architecture credit to https://github.com/web-arena-x/webarena/blob/main/run.py.
@@ -11,8 +11,8 @@ import logging
 import os
 import sys
 
-from gui_agents.s2.agents.agent_s import AgentS2
-from gui_agents.s2.agents.grounding import OSWorldACI
+from gui_agents.s1.core.AgentS import GraphSearchAgent
+from gui_agents.s1.aci.LinuxOSACI import LinuxACI
 from tqdm import tqdm
 
 import lib_run_single
@@ -154,17 +154,10 @@ def test(args: argparse.Namespace, test_all_meta: dict) -> None:
     engine_params = {"engine_type": engine_type, "model": args.model}
 
     # NEW!
-    grounding_agent = OSWorldACI(
-        platform="linux",
-        engine_params_for_generation=engine_params,
-        engine_params_for_grounding={
-            "engine_type": "huggingface",
-            "endpoint_url": args.huggingface_endpoint_url,
-        },
-    )
+    grounding_agent = LinuxACI()
 
     # NEW!
-    agent = AgentS2(
+    agent = GraphSearchAgent(
         engine_params,
         grounding_agent,
         platform="linux",
